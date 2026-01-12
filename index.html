@@ -4,44 +4,107 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VALDERA D.B. - Listino</title>
-  <link rel="manifest" href="manifest.json">
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h2, h3 { margin: 6px 0; }
+    input, button { padding: 10px; margin: 6px 0; width: 100%; }
+    button { background: #000; color: #fff; border: 0; font-weight: 600; }
+    ul { padding-left: 18px; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  </style>
 </head>
+
 <body>
   <h2>VALDERA D.B. s.n.c.</h2>
   <h3>LISTINO PRODOTTI</h3>
 
-  <input id="p" placeholder="Prodotto"><br><br>
-  <input id="z" placeholder="Prezzo (es. 11,09)"><br><br>
-  <button onclick="add()">Aggiungi</button>
-  <button onclick="pdf()">Genera PDF</button>
+  <div class="row">
+    <input id="prod" placeholder="Prodotto">
+    <input id="prezzo" placeholder="Prezzo (es. 11,09)">
+    <button type="button" onclick="aggiungi()">Aggiungi</button>
+    <button type="button" onclick="generaPDF()">Genera PDF</button>
+  </div>
 
-  <ul id="l"></ul>
+  <ul id="lista"></ul>
 
-<script>
-let a=[];
-function add(){
- let p=document.getElementById('p').value;
- let z=document.getElementById('z').value.replace('.',',');
- if(!p||!z)return;
- a.push({p,z});
- document.getElementById('l').innerHTML+=`<li>${p} – ${z}</li>`;
- document.getElementById('p').value='';
- document.getElementById('z').value='';
-}
-function pdf(){
- const {jsPDF}=window.jspdf;
- let d=new jsPDF();
- d.text("VALDERA D.B. s.n.c.",10,10);
- d.text("LISTINO PRODOTTI",10,18);
- let y=30;
- a.forEach(r=>{
-   d.text(r.p,10,y);
-   d.text(r.z,190,y,{align:"right"});
-   y+=8;
- });
- d.save("Listino_VALDERA_DB.pdf");
-}
-</script>
+  <script>
+    const righe = [];
+
+    function aggiungi() {
+      const p = document.getElementById("prod").value.trim();
+      let z = document.getElementById("prezzo").value.trim();
+
+      // normalizza 11.09 -> 11,09
+      z = z.replace(".", ",");
+
+      if (!p || !z) return;
+
+      righe.push({ p, z });
+      document.getElementById("lista").innerHTML += `<li>${p} — ${z}</li>`;
+      document.getElementById("prod").value = "";
+      document.getElementById("prezzo").value = "";
+    }
+
+    function generaPDF() {
+      if (righe.length === 0) {
+        alert("Nessun prodotto inserito");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: "pt", format: "a4" });
+
+      const marginX = 40;
+      let y = 60;
+      const pageW = pdf.internal.pageSize.getWidth();
+      const colProdX = marginX;
+      const colPriceX = pageW - marginX;
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.text("VALDERA D.B. s.n.c.", marginX, y);
+      y += 20;
+      pdf.text("LISTINO PRODOTTI", marginX, y);
+      y += 26;
+
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Prodotto", colProdX, y);
+      pdf.text("Prezzo", colPriceX, y, { align: "right" });
+      pdf.setLineWidth(0.8);
+      pdf.line(marginX, y + 6, pageW - marginX, y + 6);
+      y += 22;
+
+      pdf.setFont("helvetica", "normal");
+
+      const lineH = 16;
+      const maxProdWidth = (pageW - 2 * marginX) * 0.72;
+
+      for (const r of righe) {
+        if (y > 780) {
+          pdf.addPage();
+          y = 60;
+        }
+
+        const prodLines = pdf.splitTextToSize(r.p, maxProdWidth);
+        pdf.text(prodLines, colProdX, y);
+
+        // prezzo SENZA € (come hai scelto OFF)
+        pdf.text(r.z, colPriceX, y, { align: "right" });
+
+        y += prodLines.length * lineH + 6;
+        pdf.setDrawColor(220);
+        pdf.setLineWidth(0.5);
+        pdf.line(marginX, y - 8, pageW - marginX, y - 8);
+        pdf.setDrawColor(0);
+      }
+
+      pdf.save("Listino_VALDERA_DB.pdf");
+    }
+  </script>
 </body>
 </html>
