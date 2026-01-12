@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VALDERA D.B. - Listino</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <h2>VALDERA D.B. s.n.c.</h2>
+  <h3>LISTINO PRODOTTI</h3>
+
+  <input id="p" placeholder="Prodotto"><br><br>
+  <input id="z" placeholder="Prezzo (es. 11,09)"><br><br>
+  <button onclick="add()">Aggiungi</button>
+  <button onclick="pdf()">Genera PDF</button>
+
+  <ul id="l"></ul>
+
+<script>
+let a=[];
+function add(){
+ let p=document.getElementById('p').value;
+ let z=document.getElementById('z').value.replace('.',',');
+ if(!p||!z)return;
+ a.push({p,z});
+ document.getElementById('l').innerHTML+=`<li>${p} – ${z}</li>`;
+ document.getElementById('p').value='';
+ document.getElementById('z').value='';
+}
+function pdf(){
+ const {jsPDF}=window.jspdf;
+ let d=new jsPDF();
+ d.text("VALDERA D.B. s.n.c.",10,10);
+ d.text("LISTINO PRODOTTI",10,18);
+ let y=30;
+ a.forEach(r=>{
+   d.text(r.p,10,y);
+   d.text(r.z,190,y,{align:"right"});
+   y+=8;
+ });
+ d.save("Listino_VALDERA_DB.pdf");
+}
+</script>
+</body>
+</html>
