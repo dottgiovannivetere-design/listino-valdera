@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="it">
 <head>
@@ -18,6 +19,23 @@
     .row { display: grid; grid-template-columns: 1fr; gap: 6px; }
     .small { font-size: 12px; color: #555; margin-top: 6px; }
   </style>
+
+  <!-- 🔒 PASSWORD (mettila qui) -->
+  <script>
+    const APP_PASSWORD = "valdera2026"; // <-- CAMBIA QUI LA PASSWORD
+
+    if (sessionStorage.getItem("valdera_auth") !== "ok") {
+      const p = prompt("Password VALDERA D.B.:");
+      if (p !== APP_PASSWORD) {
+        document.documentElement.innerHTML =
+          "<h2 style='font-family:Arial;padding:20px'>Accesso negato</h2>";
+        throw new Error("Accesso negato");
+      }
+      sessionStorage.setItem("valdera_auth", "ok");
+    }
+  </script>
+  <!-- 🔒 FINE PASSWORD -->
+
 </head>
 
 <body>
@@ -32,7 +50,7 @@
   </div>
 
   <div class="small">
-    Prezzi senza simbolo €. Se il PDF non si scarica automaticamente, si aprirà in una nuova scheda (sempre).
+    Prezzi senza simbolo €. Il PDF si apre in una nuova scheda (così funziona sempre su Android/PWA).
   </div>
 
   <ul id="lista"></ul>
@@ -43,10 +61,8 @@
     function normalizePrice(raw) {
       let z = (raw || "").trim();
       if (!z) return "";
-      // normalizza 11.09 -> 11,09
-      z = z.replace(".", ",");
-      // rimuove eventuali €
-      z = z.replace("€", "").trim();
+      z = z.replace(".", ",");      // 11.09 -> 11,09
+      z = z.replace("€", "").trim(); // rimuove eventuale €
       return z;
     }
 
@@ -128,7 +144,7 @@
         pdf.setDrawColor(0);
       }
 
-      // ✅ Apertura PDF in nuova scheda (funziona anche in PWA/Android)
+      // ✅ Apri il PDF (evita blocchi download su Android/PWA)
       const blob = pdf.output("blob");
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
