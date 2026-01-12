@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VALDERA D.B. - Listino</title>
 
   <!-- jsPDF -->
@@ -11,10 +11,12 @@
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     h2, h3 { margin: 6px 0; }
-    input, button { padding: 10px; margin: 6px 0; width: 100%; }
-    button { background: #000; color: #fff; border: 0; font-weight: 600; }
+    input, button { padding: 10px; margin: 6px 0; width: 100%; box-sizing: border-box; }
+    button { background: #000; color: #fff; border: 0; font-weight: 600; cursor: pointer; }
+    button:active { opacity: 0.9; }
     ul { padding-left: 18px; }
     .row { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .small { font-size: 12px; color: #555; margin-top: 6px; }
   </style>
 </head>
 
@@ -23,10 +25,14 @@
   <h3>LISTINO PRODOTTI</h3>
 
   <div class="row">
-    <input id="prod" placeholder="Prodotto">
-    <input id="prezzo" placeholder="Prezzo (es. 11,09)">
-    <button type="button" onclick="aggiungi()">Aggiungi</button>
-    <button type="button" onclick="generaPDF()">Genera PDF</button>
+    <input id="prod" placeholder="Prodotto" />
+    <input id="prezzo" placeholder="Prezzo (es. 11,09)" inputmode="decimal" />
+    <button type="button" id="btnAdd">Aggiungi</button>
+    <button type="button" id="btnPdf">Genera PDF</button>
+  </div>
+
+  <div class="small">
+    Prezzi senza simbolo €. Se il PDF non si scarica automaticamente, si aprirà in una nuova scheda (sempre).
   </div>
 
   <ul id="lista"></ul>
@@ -34,19 +40,31 @@
   <script>
     const righe = [];
 
-    function aggiungi() {
-      const p = document.getElementById("prod").value.trim();
-      let z = document.getElementById("prezzo").value.trim();
-
+    function normalizePrice(raw) {
+      let z = (raw || "").trim();
+      if (!z) return "";
       // normalizza 11.09 -> 11,09
       z = z.replace(".", ",");
+      // rimuove eventuali €
+      z = z.replace("€", "").trim();
+      return z;
+    }
+
+    function aggiungi() {
+      const p = document.getElementById("prod").value.trim();
+      const z = normalizePrice(document.getElementById("prezzo").value);
 
       if (!p || !z) return;
 
       righe.push({ p, z });
-      document.getElementById("lista").innerHTML += `<li>${p} — ${z}</li>`;
+
+      const li = document.createElement("li");
+      li.textContent = `${p} — ${z}`;
+      document.getElementById("lista").appendChild(li);
+
       document.getElementById("prod").value = "";
       document.getElementById("prezzo").value = "";
+      document.getElementById("prod").focus();
     }
 
     function generaPDF() {
@@ -61,9 +79,11 @@
       const marginX = 40;
       let y = 60;
       const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
       const colProdX = marginX;
       const colPriceX = pageW - marginX;
 
+      // Titolo
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(16);
       pdf.text("VALDERA D.B. s.n.c.", marginX, y);
@@ -71,6 +91,7 @@
       pdf.text("LISTINO PRODOTTI", marginX, y);
       y += 26;
 
+      // Intestazione tabella
       pdf.setFontSize(11);
       pdf.setFont("helvetica", "bold");
       pdf.text("Prodotto", colProdX, y);
@@ -80,31 +101,50 @@
       y += 22;
 
       pdf.setFont("helvetica", "normal");
-
       const lineH = 16;
       const maxProdWidth = (pageW - 2 * marginX) * 0.72;
 
       for (const r of righe) {
-        if (y > 780) {
+        // Nuova pagina se serve
+        if (y > (pageH - 60)) {
           pdf.addPage();
           y = 60;
         }
 
+        // Spezza testo prodotto se lungo
         const prodLines = pdf.splitTextToSize(r.p, maxProdWidth);
         pdf.text(prodLines, colProdX, y);
 
-        // prezzo SENZA € (come hai scelto OFF)
+        // Prezzo (SENZA €)
         pdf.text(r.z, colPriceX, y, { align: "right" });
 
+        // Avanzamento riga
         y += prodLines.length * lineH + 6;
+
+        // Separatore leggero
         pdf.setDrawColor(220);
         pdf.setLineWidth(0.5);
         pdf.line(marginX, y - 8, pageW - marginX, y - 8);
         pdf.setDrawColor(0);
       }
 
-      pdf.save("Listino_VALDERA_DB.pdf");
+      // ✅ Apertura PDF in nuova scheda (funziona anche in PWA/Android)
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
     }
+
+    // Eventi
+    document.getElementById("btnAdd").addEventListener("click", aggiungi);
+    document.getElementById("btnPdf").addEventListener("click", generaPDF);
+
+    // Enter: da prodotto -> prezzo, da prezzo -> aggiungi
+    document.getElementById("prod").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("prezzo").focus();
+    });
+    document.getElementById("prezzo").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") aggiungi();
+    });
   </script>
 </body>
 </html>
