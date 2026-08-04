@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123d2f">
+  <link rel="manifest" href="manifest.json">
+  <title>VALDERA D.B. - Listino</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --brand:#123d2f; --brand2:#1f674e; --bg:#f3f6f4; --card:#fff;
+      --ink:#18221d; --muted:#68756f; --line:#dce5e0; --danger:#963442;
+      --soft:#eaf2ee;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--ink); }
+    header { position:sticky; top:0; z-index:20; padding:17px 15px; color:#fff;
+              background:linear-gradient(135deg,var(--brand),var(--brand2)); }
+    header h1 { margin:0; font-size:20px; }
+    header p { margin:4px 0 0; font-size:13px; opacity:.9; }
+    main { max-width:1150px; margin:auto; padding:13px; }
+    .card { background:var(--card); border-radius:15px; padding:14px; margin-bottom:12px;
+             box-shadow:0 2px 13px rgba(0,0,0,.06); }
+    input,select,button { font:inherit; border-radius:10px; padding:10px; border:1px solid var(--line); }
+    button { border:0; background:var(--brand); color:#fff; font-weight:700; cursor:pointer; }
+    button.alt { background:#506059; }
+    button.danger { background:var(--danger); }
+    button.light { background:var(--soft); color:var(--ink); }
+    button.small { padding:7px 9px; font-size:12px; }
+    .top-grid { display:grid; grid-template-columns:1fr 220px auto auto auto; gap:8px; }
+    .quick-filters { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .quick-filters button.active { outline:3px solid #9bc2b2; }
+    .muted { color:var(--muted); font-size:12px; }
+    .results { margin-top:10px; max-height:520px; overflow:auto; border-top:1px solid var(--line); }
+    .result {
+      display:grid;
+      grid-template-columns:32px minmax(190px,1fr) 105px 95px 132px;
+      gap:8px; align-items:center; padding:10px 2px; border-bottom:1px solid var(--line);
+    }
+    .result strong { display:block; font-size:14px; }
+    .result .category { color:var(--muted); font-size:12px; margin-top:3px; }
+    .badge { display:inline-block; padding:3px 7px; border-radius:999px; background:var(--soft); font-size:11px; }
+    .row-price { width:100%; text-align:right; }
+    .row-discount { width:100%; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:9px 6px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:middle; }
+    th.num,td.num { text-align:right; white-space:nowrap; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:11px; }
+    .manage-grid { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-top:10px; }
+    .notes-preview { padding:10px; background:#f7f9f8; border:1px solid var(--line);
+                      border-radius:10px; font-size:13px; line-height:1.5; }
+
+    @media(max-width:760px) {
+      .top-grid { grid-template-columns:1fr 1fr; }
+      .top-grid input { grid-column:1/-1; }
+      .result { grid-template-columns:28px minmax(145px,1fr) 78px; }
+      .result .row-discount-wrap { grid-column:2/3; }
+      .result .archive-actions { grid-column:2/-1; }
+      .manage-grid { grid-template-columns:1fr 1fr; }
+      .manage-grid input:first-child { grid-column:1/-1; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>VALDERA D.B. s.n.c.</h1>
+  <p>LISTINO PRODOTTI</p>
+</header>
+
+<main>
+  <section class="card">
+    <div class="top-grid">
+      <input id="search" autocomplete="off" placeholder="Cerca: Bombay, Aperol, Coca...">
+      <select id="categoryFilter"></select>
+      <button type="button" id="selectAll">Seleziona tutto (escluse birre)</button>
+      <button type="button" id="selectAllBeers">Aggiungi tutte le birre</button>
+      <button type="button" class="light" id="clearSearch">Pulisci</button>
+    </div>
+
+    <div class="quick-filters">
+      <button type="button" id="showAll" class="light active">Tutti</button>
+      <button type="button" id="showBeers">Birre</button>
+      <button type="button" id="showOthers" class="alt">Altri prodotti</button>
+    </div>
+
+    <p id="resultCount" class="muted"></p>
+    <div id="results" class="results"></div>
+  </section>
+
+  <section class="card" style="overflow:auto">
+    <strong>Riepilogo prodotti selezionati</strong>
+    <p class="muted">Prezzo e sconto si scelgono direttamente nella riga del prodotto.</p>
+    <table>
+      <thead>
+        <tr><th>Prodotto</th><th class="num">Prezzo</th><th class="num">Sconto</th><th></th></tr>
+      </thead>
+      <tbody id="selectedRows"></tbody>
+    </table>
+    <div class="toolbar">
+      <button type="button" id="makePdf">Genera PDF</button>
+      <button type="button" class="danger" id="clearSelected">Svuota selezione</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <strong>Note inserite automaticamente in fondo al PDF</strong>
+    <div class="notes-preview" style="margin-top:9px">
+      <div>• Sconto incondizionato 5% fine anno.</div>
+      <div>• Coca Cola 33 + 33 Zero: 9% sconto ulteriore fine anno.</div>
+      <div>• Rimborso a bottiglia come scritto.</div>
+      <div>• Ulteriore 9% sconto su linea Coca-Cola VAP 33 cl.</div>
+      <div>• Contributo fornitori € 2.500 da concordare.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <strong>Gestione archivio prodotti</strong>
+    <div class="manage-grid">
+      <input id="newProduct" placeholder="Nome prodotto">
+      <input id="newPrice" placeholder="Prezzo" inputmode="decimal">
+      <select id="newCategory"></select>
+      <button type="button" id="addProduct">Nuovo prodotto</button>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="alt" id="exportData">Esporta backup</button>
+      <label class="alt" style="padding:10px;border-radius:10px;color:#fff;cursor:pointer">
+        Importa backup<input id="importData" type="file" accept=".json" hidden>
+      </label>
+      <button type="button" class="danger" id="resetData">Ripristina archivio iniziale</button>
+    </div>
+  </section>
+</main>
+
+<script>
+  const PASSWORD = "valdera2026";
+  if (sessionStorage.getItem("valdera_auth") !== "ok") {
+    const entered = prompt("Password VALDERA D.B.:");
+    if (entered !== PASSWORD) {
+      document.body.innerHTML = "<h2 style='font-family:Arial;padding:30px'>Accesso negato</h2>";
+      throw new Error("Accesso negato");
+    }
+    sessionStorage.setItem("valdera_auth","ok");
+  }
+
+  const DEFAULT_PRODUCTS = [{"category": "Acque e soft drink", "product": "Acqua S. Bernardo 0,50 gas PET", "price": "4,95"}, {"category": "Acque e soft drink", "product": "Acqua S. Bernardo 0,50 naturale PET", "price": "4,95"}, {"category": "Acque e soft drink", "product": "Aranciata amara Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Aranciata Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Aranciata rossa Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Tonica Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Acqua brillante Recoaro 90 cl PET", "price": "0,99"}, {"category": "Acque e soft drink", "product": "Chinotto Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Coca-Cola 33 cl VAP", "price": "0,76"}, {"category": "Acque e soft drink", "product": "Coca-Cola Zero 33 cl VAP", "price": "0,76"}, {"category": "Acque e soft drink", "product": "Fever-Tree Mediterranean Tonic Water 20 cl VAP", "price": "1,08"}, {"category": "Acque e soft drink", "product": "Gazzosa Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Ginger Beer Sanpellegrino 20 cl VAP", "price": "0,68"}, {"category": "Acque e soft drink", "product": "Lemonsoda 1,25 l PET", "price": "1,14"}, {"category": "Acque e soft drink", "product": "Limonata Lurisia 275 ml VAP", "price": "1,16"}, {"category": "Acque e soft drink", "product": "Three Cents Aegean Tonic 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Three Cents Dry Tonic 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Three Cents Ginger Beer 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Three Cents Lemon Tonic 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Three Cents Pink Grapefruit 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Three Cents Tonic Water 20 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Fever-Tree Indian Tonic Water 20 cl", "price": "1,08"}, {"category": "Acque e soft drink", "product": "Tonica classica Sanpellegrino 20 cl VAP", "price": "0,68"}, {"category": "Acque e soft drink", "product": "Tonica Rovere Sanpellegrino 20 cl VAP", "price": "0,68"}, {"category": "Acque e soft drink", "product": "Tonica Schweppes 1 l PET", "price": "1,21"}, {"category": "Acque e soft drink", "product": "Estathé pesca bott. 25 cl VAP", "price": "0,97"}, {"category": "Acque e soft drink", "product": "Campari Soda 10 cl VP", "price": "0,87"}, {"category": "Acque e soft drink", "product": "Crodino 10 cl VP", "price": "0,56"}, {"category": "Acque e soft drink", "product": "San Pellegrino Bitter Bianco 10 cl VP", "price": "0,55"}, {"category": "Acque e soft drink", "product": "San Pellegrino Bitter Rosso 10 cl VP", "price": "0,55"}, {"category": "Acque e soft drink", "product": "Red Bull Energy Drink lattina 25 cl", "price": "1,08"}, {"category": "Succhi", "product": "Succhi Cirio pomodoro 20 cl", "price": "0,66"}, {"category": "Succhi", "product": "Succo Yoga ananas 1 l PET", "price": "1,82"}, {"category": "Succhi", "product": "Succo Yoga arancia 1 l PET", "price": "1,51"}, {"category": "Succhi", "product": "Yoga Magic arancia rossa 20 cl", "price": "0,59"}, {"category": "Succhi", "product": "Yoga Magic ACE 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic albicocca 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic ananas 20 cl", "price": "0,82"}, {"category": "Succhi", "product": "Yoga Magic arancia 20 cl", "price": "0,59"}, {"category": "Succhi", "product": "Yoga Magic mela verde 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic pera 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic pesca 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic pompelmo 20 cl", "price": "0,58"}, {"category": "Succhi", "product": "Yoga Magic mirtillo 20 cl", "price": "0,99"}, {"category": "Amari e aperitivi", "product": "Amaro Artista 70 cl", "price": "16,74"}, {"category": "Amari e aperitivi", "product": "Amaro Casciana Terme 70 cl", "price": "12,20"}, {"category": "Amari e aperitivi", "product": "Amaro Cynar 1 l", "price": "14,98"}, {"category": "Amari e aperitivi", "product": "Amaro del Capo 1 l", "price": "15,50"}, {"category": "Amari e aperitivi", "product": "Amaro Jefferson Importante 70 cl", "price": "22,90"}, {"category": "Amari e aperitivi", "product": "Amaro Montenegro 1 l", "price": "17,39"}, {"category": "Amari e aperitivi", "product": "China Martini 70 cl", "price": "11,99"}, {"category": "Amari e aperitivi", "product": "Fernet Branca 1 l", "price": "17,79"}, {"category": "Amari e aperitivi", "product": "Rabarbaro Zucca 16° 1 l", "price": "12,88"}, {"category": "Amari e aperitivi", "product": "Aperol 1 l", "price": "10,48"}, {"category": "Amari e aperitivi", "product": "Bitter Aperitivo Select 1 l", "price": "12,33"}, {"category": "Amari e aperitivi", "product": "Bitter Campari 1 l", "price": "14,18"}, {"category": "Amari e aperitivi", "product": "Bitter Martini 1 l", "price": "11,07"}, {"category": "Amari e aperitivi", "product": "Bitter Martini Riserva Speciale 70 cl", "price": "14,13"}, {"category": "Amari e aperitivi", "product": "Martini Fiero 1 l", "price": "10,50"}, {"category": "Amari e aperitivi", "product": "Martini Non Alcoholic Floreale 75 cl", "price": "8,81"}, {"category": "Amari e aperitivi", "product": "Martini Non Alcoholic Vibrante 75 cl", "price": "8,81"}, {"category": "Amari e aperitivi", "product": "Martini Riserva Speciale Ambrato 75 cl", "price": "12,93"}, {"category": "Vermouth", "product": "Martini Riserva Speciale Rubino 75 cl", "price": "12,93"}, {"category": "Vermouth", "product": "Vermouth Martini Bianco 1 l", "price": "8,14"}, {"category": "Vermouth", "product": "Vermouth Martini Rosso 1 l", "price": "8,14"}, {"category": "Vermouth", "product": "Vermouth Noilly Prat Dry 75 cl", "price": "14,61"}, {"category": "Vermouth", "product": "Vermouth Punt e Mes 1 l", "price": "9,48"}, {"category": "Gin", "product": "Gin Beefeater 0.0 70 cl", "price": "9,95"}, {"category": "Gin", "product": "Gin Beefeater Black 70 cl", "price": "14,16"}, {"category": "Gin", "product": "Gin Beefeater 1 l", "price": "16,33"}, {"category": "Gin", "product": "Gin Beefeater 24 70 cl", "price": "24,16"}, {"category": "Gin", "product": "Gin Bombay Bramble 70 cl", "price": "15,68"}, {"category": "Gin", "product": "Gin Bombay Sapphire Premier Cru 70 cl", "price": "27,81"}, {"category": "Gin", "product": "Gin Bombay Sapphire 1 l", "price": "17,66"}, {"category": "Gin", "product": "Gin Bombay Star 70 cl", "price": "39,47"}, {"category": "Gin", "product": "Gin Bombay Sunset 70 cl", "price": "18,01"}, {"category": "Gin", "product": "Gin Botanic Cubical Ultra Premium 70 cl", "price": "42,66"}, {"category": "Gin", "product": "Gin Bulldog 40° 1 l", "price": "24,23"}, {"category": "Gin", "product": "Gin Citadelle Original 70 cl", "price": "24,61"}, {"category": "Gin", "product": "Gin Cubical Premium 70 cl", "price": "32,78"}, {"category": "Gin", "product": "Gin Dry London N.3 70 cl", "price": "29,57"}, {"category": "Gin", "product": "Gin Elephant 50 cl", "price": "30,88"}, {"category": "Gin", "product": "Gin Engine Bio 42° 70 cl", "price": "34,10"}, {"category": "Gin", "product": "Gin Etsu Japanese 70 cl", "price": "31,26"}, {"category": "Gin", "product": "Gin Ginepraio Anphora 70 cl", "price": "29,83"}, {"category": "Gin", "product": "Gin Ginepraio Bio 70 cl", "price": "33,16"}, {"category": "Gin", "product": "Gin Hendrick's 70 cl", "price": "26,94"}, {"category": "Gin", "product": "Gin London Dry Blue N.1 70 cl", "price": "29,31"}, {"category": "Gin", "product": "Gin Malfy Arancia 70 cl", "price": "26,13"}, {"category": "Gin", "product": "Gin Malfy con Limone 70 cl", "price": "26,13"}, {"category": "Gin", "product": "Gin Malfy Missoni Original 70 cl", "price": "36,58"}, {"category": "Gin", "product": "Gin Malfy Missoni Rosa 70 cl", "price": "38,48"}, {"category": "Gin", "product": "Gin Malfy Original 70 cl", "price": "24,23"}, {"category": "Gin", "product": "Gin Malfy Rosa 70 cl", "price": "26,13"}, {"category": "Gin", "product": "Gin Martin Miller's Original 70 cl", "price": "28,31"}, {"category": "Gin", "product": "Gin Monkey 50 cl", "price": "34,10"}, {"category": "Gin", "product": "Gin Nordés 0.0 70 cl", "price": "27,07"}, {"category": "Gin", "product": "Gin Nordés Atlantic SS 70 cl", "price": "26,41"}, {"category": "Gin", "product": "Gin Oxley 70 cl", "price": "37,67"}, {"category": "Gin", "product": "Gin Plymouth 1 l", "price": "28,41"}, {"category": "Gin", "product": "Gin Plymouth Navy Strength 70 cl", "price": "40,81"}, {"category": "Gin", "product": "Gin Portofino Dry 50 cl", "price": "38,85"}, {"category": "Gin", "product": "Gin Sabatini 70 cl", "price": "30,31"}, {"category": "Gin", "product": "Gin Suntory Roku Japan 1 l", "price": "27,46"}, {"category": "Gin", "product": "Gin Tanqueray N. Ten 70 cl", "price": "31,74"}, {"category": "Gin", "product": "Gin Tanqueray 1 l", "price": "17,47"}, {"category": "Gin", "product": "Gin Tanqueray Alcohol Free 70 cl", "price": "12,26"}, {"category": "Distillati", "product": "Cachaça 51 1 l", "price": "15,11"}, {"category": "Distillati", "product": "Cachaça Leblon 70 cl", "price": "22,65"}, {"category": "Distillati", "product": "Sagatiba Pura 70 cl", "price": "13,96"}, {"category": "Distillati", "product": "Vecchia Romagna Etichetta Nera 1 l", "price": "16,82"}, {"category": "Distillati", "product": "Vecchia Romagna 1,5 l", "price": "23,28"}, {"category": "Grappe e liquori", "product": "Grappa Giare Amarone Marzadro 70 cl", "price": "31,62"}, {"category": "Grappe e liquori", "product": "Prime Uve Maschio 70 cl", "price": "18,86"}, {"category": "Grappe e liquori", "product": "Prime Uve Nere Maschio 70 cl", "price": "20,20"}, {"category": "Grappe e liquori", "product": "Limoncello di Capri 1 l", "price": "13,21"}, {"category": "Grappe e liquori", "product": "Cherry Stock 70 cl", "price": "9,10"}, {"category": "Grappe e liquori", "product": "De Kuyper Apricot Brandy 70 cl", "price": "11,90"}, {"category": "Grappe e liquori", "product": "Italicus Rosolio di Bergamotto 20° 70 cl", "price": "32,67"}, {"category": "Grappe e liquori", "product": "Maraschino Luxardo 70 cl", "price": "15,75"}, {"category": "Grappe e liquori", "product": "Saint Germain 70 cl", "price": "31,29"}, {"category": "Grappe e liquori", "product": "Tio Pepe Sherry 1 l", "price": "11,90"}, {"category": "Grappe e liquori", "product": "Caffè Sport Borghetti 1 l", "price": "14,26"}, {"category": "Grappe e liquori", "product": "Sambuca Molinari 1 l", "price": "16,64"}, {"category": "Rum", "product": "Havana Club 3 Y.O. 1 l", "price": "16,06"}, {"category": "Rum", "product": "Matusalem 7Y 70 cl", "price": "16,06"}, {"category": "Rum", "product": "Bacardi Bianco 1 l", "price": "14,11"}, {"category": "Rum", "product": "Bacardi Carta Oro 1 l", "price": "15,65"}, {"category": "Rum", "product": "Ron Zacapa Centenario 23Y 70 cl", "price": "46,22"}, {"category": "Rum", "product": "Barceló Gran Añejo 70 cl", "price": "15,76"}, {"category": "Rum", "product": "Barceló Imperial 70 cl", "price": "24,23"}, {"category": "Rum", "product": "Diplomatico Mantuano 70 cl", "price": "23,66"}, {"category": "Rum", "product": "Diplomatico Reserva Exclusiva 70 cl", "price": "30,78"}, {"category": "Rum", "product": "Havana Club 7 Y.O. 70 cl", "price": "22,56"}, {"category": "Rum", "product": "Matusalem 15Y 70 cl", "price": "25,90"}, {"category": "Vodka", "product": "Grey Goose 70 cl", "price": "33,81"}, {"category": "Vodka", "product": "Ketel One 1 l", "price": "23,46"}, {"category": "Vodka", "product": "Vodka 42 Below 70 cl", "price": "13,19"}, {"category": "Vodka", "product": "Vodka Absolut 1 l", "price": "17,45"}, {"category": "Vodka", "product": "Vodka Beluga 70 cl", "price": "33,16"}, {"category": "Vodka", "product": "Vodka Ciroc 70 cl", "price": "29,79"}, {"category": "Vodka", "product": "Vodka Moskovskaya 1 l", "price": "12,35"}, {"category": "Vodka", "product": "Vodka Stolichnaya 1 l", "price": "14,50"}, {"category": "Whisky", "product": "Maker's Mark 70 cl", "price": "27,96"}, {"category": "Whisky", "product": "Baileys Irish Cream 1 l", "price": "16,47"}, {"category": "Whisky", "product": "Jameson Black Barrel 70 cl", "price": "34,56"}, {"category": "Whisky", "product": "Jameson Triple Distilled 1 l", "price": "22,67"}, {"category": "Whisky", "product": "Johnnie Walker Black 70 cl", "price": "23,45"}, {"category": "Whisky", "product": "Johnnie Walker Red 1 l", "price": "17,09"}, {"category": "Whisky", "product": "Knob Creek 70 cl", "price": "29,99"}, {"category": "Whisky", "product": "Lagavulin 16Y 70 cl", "price": "68,48"}, {"category": "Whisky", "product": "Talisker 10Y 70 cl", "price": "36,58"}, {"category": "Whisky", "product": "Bulleit Bourbon 70 cl", "price": "19,36"}, {"category": "Whisky", "product": "Laphroaig 10 anni 70 cl", "price": "33,82"}, {"category": "Whisky", "product": "Wild Turkey Bourbon 1 l", "price": "24,61"}, {"category": "Whisky", "product": "Wild Turkey Rye 70 cl", "price": "25,56"}, {"category": "Whisky", "product": "Wild Turkey 101 70 cl", "price": "26,13"}, {"category": "Tequila e mezcal", "product": "Mezcal Beneva con Gusano 70 cl", "price": "20,30"}, {"category": "Tequila e mezcal", "product": "Mezcal Montelobos Espadin 70 cl", "price": "32,78"}, {"category": "Tequila e mezcal", "product": "Mezcal Perro San Juan Espadin 70 cl", "price": "31,26"}, {"category": "Tequila e mezcal", "product": "Pisco Capel 70 cl", "price": "14,20"}, {"category": "Tequila e mezcal", "product": "Tequila Cazadores Blanco 70 cl", "price": "14,84"}, {"category": "Tequila e mezcal", "product": "Tequila Cazadores Reposado 70 cl", "price": "16,91"}, {"category": "Tequila e mezcal", "product": "Tequila Corralejo Blanco 38% 70 cl", "price": "22,33"}, {"category": "Tequila e mezcal", "product": "Tequila Espolon Blanco 70 cl", "price": "18,35"}, {"category": "Tequila e mezcal", "product": "Tequila Espolon Reposado 70 cl", "price": "19,96"}, {"category": "Tequila e mezcal", "product": "Tequila Ocho Blanco 50 cl", "price": "27,27"}, {"category": "Tequila e mezcal", "product": "Tequila Olmeca Altos Plata 70 cl", "price": "21,95"}, {"category": "Tequila e mezcal", "product": "Tabernero Pisco Puro Quebranita 40° 70 cl", "price": "23,09"}, {"category": "Altri", "product": "Angostura Orange 10 cl", "price": "12,45"}, {"category": "Birre", "product": "Beck's", "price": "0,77"}, {"category": "Birre", "product": "Corona", "price": "1,20"}, {"category": "Birre", "product": "Tennent's", "price": "1,32"}, {"category": "Birre", "product": "Menabrea", "price": "0,94"}, {"category": "Birre", "product": "Moretti", "price": "0,74"}, {"category": "Birre", "product": "Moretti 66 cl", "price": "1,08"}, {"category": "Birre", "product": "Nastro Azzurro", "price": "0,79"}, {"category": "Birre", "product": "Ichnusa non filtrata", "price": "1,05"}, {"category": "Birre", "product": "Messina Cristalli di Sale 33 cl", "price": "1,31"}];
+  const PRODUCTS_KEY = "valdera_products_v70";
+  const SELECTED_KEY = "valdera_selected_v70";
+
+  let products = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || "null")
+    || DEFAULT_PRODUCTS.map(item => ({...item}));
+  let selected = JSON.parse(localStorage.getItem(SELECTED_KEY) || "[]");
+  let drafts = {};
+  let quickMode = "all";
+
+  const $ = id => document.getElementById(id);
+
+  function normalizeText(value) {
+    return (value || "").toLowerCase().normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").replace(/[’']/g,"").trim();
+  }
+
+  function normalizePrice(value) {
+    const cleaned = String(value || "").replace("€","").replace(",",".").trim();
+    const number = Number(cleaned);
+    return Number.isFinite(number) ? number.toFixed(2).replace(".",",") : "";
+  }
+
+  function saveProducts() { localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products)); }
+  function saveSelected() { localStorage.setItem(SELECTED_KEY, JSON.stringify(selected)); }
+
+  function categories() {
+    return [...new Set(products.map(item => item.category))].sort((a,b)=>a.localeCompare(b));
+  }
+
+  function fillCategoryMenus() {
+    const list = categories();
+    $("categoryFilter").innerHTML = '<option value="">Tutte le categorie</option>' +
+      list.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("newCategory").innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join("");
+  }
+
+  function getDraft(index) {
+    if (!drafts[index]) drafts[index] = { price: products[index].price, discount: 0 };
+    return drafts[index];
+  }
+
+  function filteredProducts() {
+    const query = normalizeText($("search").value);
+    const category = $("categoryFilter").value;
+
+    return products.map((item,index)=>({...item,index})).filter(item => {
+      const searchable = normalizeText(`${item.product} ${item.category}`);
+      const quickOk =
+        quickMode === "all" ||
+        (quickMode === "beers" && item.category === "Birre") ||
+        (quickMode === "others" && item.category !== "Birre");
+
+      return quickOk &&
+        (!category || item.category === category) &&
+        (!query || searchable.includes(query));
+    });
+  }
+
+  function isSelected(index) {
+    return selected.some(item => item.productIndex === index);
+  }
+
+  function discountOptions(current) {
+    let out = '<option value="0">Nessuno</option>';
+    for (let n=1; n<=10; n++) {
+      out += `<option value="${n}" ${Number(current)===n ? "selected" : ""}>- ${n}</option>`;
+    }
+    return out;
+  }
+
+  function renderResults() {
+    const list = filteredProducts();
+    $("resultCount").textContent = `${list.length} risultati su ${products.length} prodotti`;
+
+    $("results").innerHTML = list.map(item => {
+      const draft = getDraft(item.index);
+      return `
+        <div class="result">
+          <input type="checkbox" ${isSelected(item.index) ? "checked" : ""}
+            onchange="toggleProduct(${item.index}, this.checked)">
+
+          <div>
+            <strong>${item.product}</strong>
+            <div class="category"><span class="badge">${item.category}</span></div>
+          </div>
+
+          <input class="row-price" value="${draft.price}" inputmode="decimal"
+            onchange="changeDraftPrice(${item.index}, this.value)">
+
+          <div class="row-discount-wrap">
+            <select class="row-discount"
+              onchange="changeDraftDiscount(${item.index}, this.value)">
+              ${discountOptions(draft.discount)}
+            </select>
+          </div>
+
+          <div class="archive-actions">
+            <button type="button" class="small alt" onclick="editArchiveProduct(${item.index})">Modifica</button>
+            <button type="button" class="small danger" onclick="deleteArchiveProduct(${item.index})">Elimina</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function renderSelected() {
+    $("selectedRows").innerHTML = selected.map((item,index)=>`
+      <tr>
+        <td>${item.product}<div class="muted">${item.category}</div></td>
+        <td class="num">${item.tempPrice}</td>
+        <td class="num">${Number(item.discount)>0 ? "-" + item.discount : ""}</td>
+        <td><button type="button" class="small danger" onclick="removeSelected(${index})">Elimina</button></td>
+      </tr>
+    `).join("");
+  }
+
+  window.changeDraftPrice = (index,value) => {
+    const normalized = normalizePrice(value);
+    if (!normalized) { alert("Prezzo non valido"); renderResults(); return; }
+    getDraft(index).price = normalized;
+    const row = selected.find(x => x.productIndex === index);
+    if (row) { row.tempPrice = normalized; saveSelected(); renderSelected(); }
+  };
+
+  window.changeDraftDiscount = (index,value) => {
+    getDraft(index).discount = Number(value) || 0;
+    const row = selected.find(x => x.productIndex === index);
+    if (row) { row.discount = Number(value) || 0; saveSelected(); renderSelected(); }
+  };
+
+  window.toggleProduct = (index,checked) => {
+    if (checked && !isSelected(index)) {
+      const p = products[index], d = getDraft(index);
+      selected.push({
+        productIndex:index, product:p.product, category:p.category,
+        listPrice:p.price, tempPrice:d.price, discount:d.discount
+      });
+    } else if (!checked) {
+      selected = selected.filter(x => x.productIndex !== index);
+    }
+    saveSelected(); renderSelected(); renderResults();
+  };
+
+  window.removeSelected = index => {
+    selected.splice(index,1); saveSelected(); renderSelected(); renderResults();
+  };
+
+  window.editArchiveProduct = index => {
+    const current = products[index];
+    const name = prompt("Nome prodotto",current.product); if (name===null) return;
+    const price = prompt("Prezzo di listino",current.price); if (price===null) return;
+    const category = prompt("Categoria",current.category); if (category===null) return;
+    const normalized = normalizePrice(price);
+    if (!name.trim() || !normalized) return alert("Dati non validi");
+    products[index] = {product:name.trim(),price:normalized,category:category.trim()||"Altri"};
+    drafts[index] = {price:normalized,discount:0};
+    selected = selected.filter(x => x.productIndex !== index);
+    saveProducts(); saveSelected(); fillCategoryMenus(); renderResults(); renderSelected();
+  };
+
+  window.deleteArchiveProduct = index => {
+    if (!confirm("Eliminare definitivamente questo prodotto?")) return;
+    products.splice(index,1); drafts = {};
+    selected = selected.filter(x => x.productIndex !== index).map(x => ({
+      ...x, productIndex:x.productIndex > index ? x.productIndex-1 : x.productIndex
+    }));
+    saveProducts(); saveSelected(); fillCategoryMenus(); renderResults(); renderSelected();
+  };
+
+  function selectAllFiltered() {
+    for (const item of filteredProducts()) {
+      if (item.category === "Birre") continue;
+
+      if (!isSelected(item.index)) {
+        const d = getDraft(item.index);
+        selected.push({
+          productIndex:item.index,
+          product:item.product,
+          category:item.category,
+          listPrice:item.price,
+          tempPrice:d.price,
+          discount:d.discount
+        });
+      }
+    }
+
+    saveSelected();
+    renderResults();
+    renderSelected();
+  }
+
+  function selectAllBeers() {
+    const beers = products
+      .map((item,index)=>({...item,index}))
+      .filter(item => item.category === "Birre");
+
+    for (const item of beers) {
+      if (!isSelected(item.index)) {
+        const d = getDraft(item.index);
+        selected.push({
+          productIndex:item.index,
+          product:item.product,
+          category:item.category,
+          listPrice:item.price,
+          tempPrice:d.price,
+          discount:d.discount
+        });
+      }
+    }
+
+    saveSelected();
+    renderResults();
+    renderSelected();
+  }
+
+  function clearCurrentSelection() {
+    selected = []; drafts = {}; saveSelected(); renderResults(); renderSelected();
+  }
+
+  function setQuickMode(mode) {
+    quickMode = mode;
+    $("showAll").classList.toggle("active", mode==="all");
+    $("showBeers").classList.toggle("active", mode==="beers");
+    $("showOthers").classList.toggle("active", mode==="others");
+    renderResults();
+  }
+
+  function addNewProduct() {
+    const product = $("newProduct").value.trim();
+    const price = normalizePrice($("newPrice").value);
+    const category = $("newCategory").value || "Altri";
+    if (!product || !price) return alert("Inserisci nome e prezzo");
+    products.push({product,price,category});
+    saveProducts(); fillCategoryMenus(); renderResults();
+    $("newProduct").value=""; $("newPrice").value="";
+  }
+
+  function ensureSpace(pdf,required,state) {
+    if (state.y + required <= state.pageHeight - 52) return;
+    pdf.addPage(); state.y=48; drawPdfHeader(pdf,state);
+  }
+
+  function drawPdfHeader(pdf,state) {
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(16);
+    pdf.text("VALDERA D.B. s.n.c.",state.margin,state.y); state.y+=20;
+    pdf.text("LISTINO PRODOTTI",state.margin,state.y);
+    pdf.setFontSize(9); pdf.setFont("helvetica","normal");
+    pdf.text(new Date().toLocaleDateString("it-IT"),state.pageWidth-state.margin,state.y,{align:"right"});
+    state.y+=26; pdf.setFont("helvetica","bold"); pdf.setFontSize(10);
+    pdf.text("Prodotto",state.margin,state.y);
+    pdf.text("Prezzo",state.pageWidth-105,state.y,{align:"right"});
+    pdf.text("Sconto",state.pageWidth-state.margin,state.y,{align:"right"});
+    pdf.line(state.margin,state.y+5,state.pageWidth-state.margin,state.y+5); state.y+=20;
+  }
+
+  function drawNotes(pdf,state) {
+    const notes = [
+      "Sconto incondizionato 5% fine anno.",
+      "Coca Cola 33 + 33 Zero: 9% sconto ulteriore fine anno.",
+      "Rimborso a bottiglia come scritto.",
+      "Ulteriore 9% sconto su linea Coca-Cola VAP 33 cl.",
+      "Contributo fornitori € 2.500 da concordare."
+    ];
+    ensureSpace(pdf,110,state); state.y+=8;
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(11);
+    pdf.text("NOTE COMMERCIALI",state.margin,state.y); state.y+=17;
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(9);
+    for (const note of notes) {
+      const lines = pdf.splitTextToSize("• "+note,state.pageWidth-state.margin*2);
+      ensureSpace(pdf,lines.length*12+5,state);
+      pdf.text(lines,state.margin,state.y); state.y += lines.length*12+4;
+    }
+  }
+
+  function generatePdf() {
+    if (!selected.length) return alert("Non hai selezionato prodotti");
+    if (!window.jspdf || !window.jspdf.jsPDF) return alert("Libreria PDF non disponibile");
+    const {jsPDF} = window.jspdf;
+    const pdf = new jsPDF({unit:"pt",format:"a4"});
+    const state = {margin:40,pageWidth:pdf.internal.pageSize.getWidth(),
+      pageHeight:pdf.internal.pageSize.getHeight(),y:48};
+    drawPdfHeader(pdf,state);
+    const sorted = [...selected].sort((a,b)=>a.category.localeCompare(b.category)||a.product.localeCompare(b.product));
+    for (const item of sorted) {
+      const lines = pdf.splitTextToSize(item.product,state.pageWidth-225);
+      const h = Math.max(18,lines.length*13+5); ensureSpace(pdf,h,state);
+      pdf.setFont("helvetica","normal"); pdf.setFontSize(10);
+      pdf.text(lines,state.margin,state.y);
+      pdf.text(item.tempPrice,state.pageWidth-105,state.y,{align:"right"});
+      pdf.text(Number(item.discount)>0 ? "-"+item.discount : "",state.pageWidth-state.margin,state.y,{align:"right"});
+      state.y+=h; pdf.setDrawColor(225);
+      pdf.line(state.margin,state.y-7,state.pageWidth-state.margin,state.y-7);
+    }
+    drawNotes(pdf,state);
+    const blob = pdf.output("blob"), url = URL.createObjectURL(blob);
+    const opened = window.open(url,"_blank");
+    if (!opened) {
+      const a=document.createElement("a"); a.href=url; a.download="Listino_VALDERA_DB.pdf"; a.click();
+    }
+    clearCurrentSelection();
+    alert("PDF generato. Selezione, prezzi temporanei e sconti azzerati.");
+  }
+
+  function exportBackup() {
+    const blob = new Blob([JSON.stringify(products,null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="valdera_backup_prodotti.json"; a.click();
+  }
+
+  $("importData").addEventListener("change",async e=>{
+    try {
+      const imported=JSON.parse(await e.target.files[0].text());
+      if (!Array.isArray(imported)) throw new Error();
+      products=imported; selected=[]; drafts={};
+      saveProducts(); saveSelected(); fillCategoryMenus(); renderResults(); renderSelected();
+      alert("Backup importato");
+    } catch { alert("File di backup non valido"); }
+  });
+
+  $("search").addEventListener("input",renderResults);
+  $("categoryFilter").addEventListener("change",renderResults);
+  $("selectAll").onclick=selectAllFiltered;
+  $("selectAllBeers").onclick=selectAllBeers;
+  $("clearSearch").onclick=()=>{ $("search").value=""; $("categoryFilter").value=""; renderResults(); };
+  $("showAll").onclick=()=>setQuickMode("all");
+  $("showBeers").onclick=()=>setQuickMode("beers");
+  $("showOthers").onclick=()=>setQuickMode("others");
+  $("makePdf").onclick=generatePdf;
+  $("clearSelected").onclick=()=>{ if(confirm("Svuotare la selezione?")) clearCurrentSelection(); };
+  $("addProduct").onclick=addNewProduct;
+  $("exportData").onclick=exportBackup;
+  $("resetData").onclick=()=>{
+    if (!confirm("Ripristinare l'archivio iniziale?")) return;
+    products=DEFAULT_PRODUCTS.map(x=>({...x})); selected=[]; drafts={};
+    saveProducts(); saveSelected(); fillCategoryMenus(); renderResults(); renderSelected();
+  };
+
+  fillCategoryMenus(); renderResults(); renderSelected();
+</script>
+</body>
+</html>
